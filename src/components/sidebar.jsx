@@ -1,9 +1,55 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { signOut } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 function Sidebar() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [rooms, setRooms] = useState([]);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "rooms"),
+      (snapshot) => {
+        const roomList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setRooms(roomList);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const createRoom = async () => {
+    const roomName = prompt("Enter room name");
+
+    if (!roomName) return;
+
+    try {
+      const docRef = await addDoc(collection(db, "rooms"), {
+        name: roomName,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+      });
+
+      // Open the newly created room
+      navigate(`/room/${docRef.id}`);
+    } catch (error) {
+      console.error("Error creating room:", error);
+    }
+  };
 
   return (
     <div className="sidebar">
@@ -11,44 +57,37 @@ function Sidebar() {
         <h2>ChatApp</h2>
       </div>
 
-      {/* User Profile */}
-      <div className="user-info">
-        {user && (
-          <>
-            <img
-              src={user.photoURL}
-              alt="Profile"
-              width="50"
-              style={{ borderRadius: "50%" }}
-            />
-            <h3>{user.displayName}</h3>
+      {user && (
+        <div className="user-info">
+          <img
+            src={user.photoURL}
+            alt="Profile"
+            width="50"
+            style={{ borderRadius: "50%" }}
+          />
 
-            <button onClick={() => signOut(auth)}>
-              Logout
-            </button>
-          </>
-        )}
-      </div>
+          <h3>{user.displayName}</h3>
 
-      <div className="search-box">
-        <input type="text" placeholder="Search contacts..." />
-      </div>
+          <button onClick={() => signOut(auth)}>
+            Logout
+          </button>
+        </div>
+      )}
+
+      <button onClick={createRoom} className="new-room-btn">
+        + New Room
+      </button>
 
       <div className="contacts">
-        <div className="contact-card">
-          <h4>Mansi Bighane</h4>
-          <p>Hey, how are you?</p>
-        </div>
-
-        <div className="contact-card">
-          <h4>Sarah Smith</h4>
-          <p>See you tomorrow!</p>
-        </div>
-
-        <div className="contact-card">
-          <h4>Alex Brown</h4>
-          <p>Let's meet at 5 PM.</p>
-        </div>
+        {rooms.map((room) => (
+          <div
+            key={room.id}
+            className="contact-card"
+            onClick={() => navigate(`/room/${room.id}`)}
+          >
+            <h4>{room.name}</h4>
+          </div>
+        ))}
       </div>
     </div>
   );
